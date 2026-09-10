@@ -85,8 +85,20 @@ export async function onRequestPost(context) {
   }
 }
 
-// Anything other than POST on this path.
-export async function onRequest(context) {
-  if (context.request.method === 'POST') return onRequestPost(context);
-  return json(405, { ok: false, error: 'method_not_allowed' });
+/**
+ * A GET on this path is a deployment probe. It never returns the secret,
+ * only whether the environment variable is present, which is the single
+ * most common reason submissions go nowhere.
+ *
+ *   {"error":"method_not_allowed","configured":true}   function live, env set
+ *   {"error":"method_not_allowed","configured":false}  function live, env MISSING
+ *   an HTML page or a 404                              function not deployed
+ */
+export async function onRequestGet(context) {
+  return json(405, {
+    ok: false,
+    error: 'method_not_allowed',
+    configured: Boolean(context.env.N8N_WEBHOOK_URL),
+    secret_set: Boolean(context.env.AUDIT_SHARED_SECRET),
+  });
 }

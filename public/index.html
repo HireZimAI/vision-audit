@@ -518,15 +518,26 @@ document.getElementById("send").addEventListener("click", function(){
  out.className = "small";
  out.textContent = "Sending.";
  unlock();
- if(!WEBHOOK) { out.textContent = "Unlocked below."; return; }
  fetch(WEBHOOK, {
   method: "POST",
   headers: {"Content-Type":"application/json"},
   body: JSON.stringify(Object.assign({email:email, name:name, consent:true, source:"builders-vision-audit", page:location.href}, RESULT))
  }).then(function(r){
-  out.textContent = r.ok ? "On its way to "+email+". Your plan is unlocked below." : "Unlocked below. The email did not send, so save the PDF.";
- }).catch(function(){
-  out.textContent = "Unlocked below. The email did not send, so save the PDF.";
+  if(r.ok){
+   out.textContent = "On its way to "+email+". Your plan is unlocked below.";
+   return;
+  }
+  /* Say nothing alarming to the reader; put the reason where the operator
+     will find it. Codes: not_configured, upstream_404, upstream_unreachable. */
+  r.json().then(function(e){
+   console.error("[vision-audit] delivery failed:", r.status, e);
+  }).catch(function(){
+   console.error("[vision-audit] delivery failed:", r.status, "(no JSON body — /api/audit may not be deployed)");
+  });
+  out.textContent = "Your plan is unlocked below. If the email has not arrived in ten minutes, use Save as PDF.";
+ }).catch(function(err){
+  console.error("[vision-audit] request failed:", err);
+  out.textContent = "Your plan is unlocked below. If the email has not arrived in ten minutes, use Save as PDF.";
  });
 });
 
