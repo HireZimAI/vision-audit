@@ -1,0 +1,336 @@
+{
+  "name": "Builder's Vision Audit \u2014 report and email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "vision-audit",
+        "responseMode": "onReceived",
+        "responseData": "{\"ok\":true}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ],
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Audit submitted",
+      "webhookId": "bvh-vision-audit-01"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// \u2500\u2500 Normalise the submission and build the Claude request \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst raw = $input.first().json;\nconst b = raw.body && typeof raw.body === 'object' ? raw.body : raw;\n\nconst email = String(b.email || '').trim().toLowerCase();\nconst name  = String(b.name  || '').trim();\nconst okEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(email);\nconst consent = b.consent === true || b.consent === 'true';\n\nconst s = b.scores || {};\nconst num = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : 0);\n\nconst clean = {\n  valid: okEmail && consent,\n  reject_reason: !okEmail ? 'bad_email' : (!consent ? 'no_consent' : ''),\n  email, name: name || 'there',\n  archetype: String(b.archetype || ''),\n  overall: num(b.overall), ambition: num(b.ambition),\n  capacity: num(b.capacity), spread: num(b.spread),\n  weakest: String(b.weakest || ''), second_weakest: String(b.second_weakest || ''),\n  strongest: String(b.strongest || ''),\n  vision: num(s.Vision), scale: num(s.Scale), impact: num(s.Impact),\n  systems: num(s.Systems), legacy: num(s.Legacy),\n  business: String(b.business || '').slice(0, 600),\n  future: String(b.future || '').slice(0, 600),\n  consent, source: String(b.source || 'builders-vision-audit'),\n  page: String(b.page || ''),\n  scored_at: String(b.scored_at || new Date().toISOString()),\n  received_at: new Date().toISOString()\n};\n\n// The fifteen answers in full \u2014 this is what makes the report specific.\nconst qa = Array.isArray(b.questions) ? b.questions.map(q =>\n  '- [' + q.dimension + '] ' + q.prompt + '\\n  Chose: ' + q.chose + ' (' + q.value + '/4)'\n).join('\\n') : '(answers not supplied)';\n\nconst SYSTEM = [\n\"You write diagnostic reports for The Builder's Handbook (www.thebuildershandbook.com), read by owner-operators of businesses in Southern Africa, the UK, the US and Australia: trucking, clinics, consultancies, logistics, small software firms.\",\n\"\",\n\"Voice: direct, unsentimental, specific. You are an advisor who has seen this pattern many times. Address the reader as \\\"you\\\".\",\n\"\",\n\"Hard rules:\",\n\"1. Never congratulate and never open with praise.\",\n\"2. Never use \\\"not X but Y\\\" antithesis constructions. Write comparisons as separate direct statements.\",\n\"3. Never use canned openers: \\\"Let's dive in\\\", \\\"It's worth noting\\\", \\\"In today's fast-paced world\\\", \\\"The bottom line is\\\", \\\"Here's the thing\\\".\",\n\"4. Use only the figures supplied. Never invent a number about their business.\",\n\"5. Quote the reader's own words back where it sharpens a point.\",\n\"6. The weakest dimension is the subject of the report. The strongest is context.\",\n\"7. Lead with the cost of the current shape. Do not bury it.\",\n\"8. Prose in the diagnosis sections. Lists only in the thirty-day plan.\",\n\"\",\n\"Output exactly these five markdown H2 sections and nothing else, no preamble, no sign-off:\",\n\"## The shape of your build\",\n\"## What this is costing you\",\n\"## Your binding constraint\",\n\"## Thirty days\",\n\"## The question to sit with\",\n\"\",\n\"\\\"Thirty days\\\" contains exactly three numbered actions. Each is doable within a month by one person, states what gets written down or handed over, and names how they will know it happened.\",\n\"\\\"The question to sit with\\\" is one sentence.\",\n\"\",\n\"Length: 600 to 750 words.\"\n].join('\\n');\n\nconst USER = [\n'Write the report for this respondent.',\n'',\n'Name: ' + clean.name,\n'Archetype: ' + clean.archetype,\n'Overall: ' + clean.overall + '/100',\n'Ambition (vision, impact, legacy): ' + clean.ambition + '/100',\n'Capacity (scale, systems): ' + clean.capacity + '/100',\n'Spread between strongest and weakest: ' + clean.spread + ' points',\n'',\n'Dimension scores out of 100:',\n'Vision ' + clean.vision + ', Scale ' + clean.scale + ', Impact ' + clean.impact + ', Systems ' + clean.systems + ', Legacy ' + clean.legacy,\n'Strongest: ' + clean.strongest,\n'Weakest: ' + clean.weakest,\n'Second weakest: ' + clean.second_weakest,\n'',\n'In their own words, what they are building:',\n(clean.business || '(not supplied)'),\n'',\n'In their own words, what it looks like finished:',\n(clean.future || '(not supplied)'),\n'',\n'Their fifteen answers:',\nqa\n].join('\\n');\n\nclean.llm_body = {\n  model: 'claude-sonnet-5',\n  max_tokens: 1800,\n  system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],\n  messages: [{ role: 'user', content: USER }]\n};\n\nreturn [{ json: clean }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -40,
+        0
+      ],
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Normalise submission"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        180,
+        0
+      ],
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Email and consent valid?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.llm_body) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        -100
+      ],
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Write the report",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "anthropicApi": {
+          "id": "7lDHTg0ue307rh5g",
+          "name": "Purple Ivy - Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// \u2500\u2500 Turn the model output into a branded HTML email \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst d = $('Normalise submission').first().json;\nconst res = $input.first().json;\n\n// Pull the text blocks out of the Anthropic response, whatever else came back.\nlet body = '';\ntry {\n  if (Array.isArray(res.content)) {\n    body = res.content.filter(c => c && c.type === 'text').map(c => c.text).join('\\n\\n').trim();\n  }\n} catch (e) { body = ''; }\n\nconst generated = body.length > 200;\n\n// If the model failed, the reader still gets their score and a static plan.\nconst fallback = [\n'## The shape of your build',\n'You scored ' + d.overall + ' out of 100. Ambition sits at ' + d.ambition + ' and capacity at ' + d.capacity + '. Your weakest dimension is ' + d.weakest + '.',\n'',\n'## Your binding constraint',\nd.weakest + ' is the dimension holding the rest back. Effort spent anywhere else returns very little until it moves.',\n'',\n'## Thirty days',\n'1. Write down, on one page, what is true about ' + d.weakest + ' in your business today. Numbers, not adjectives.',\n'2. Name the single thing in that dimension that only you can currently do, and hand one piece of it to someone else this month.',\n'3. Book a date thirty days out to retake the audit and compare the two scores.',\n'',\n'## The question to sit with',\n'What would have to be true about ' + d.weakest + ' before the rest of this business could grow without you?'\n].join('\\n');\n\nconst src = generated ? body : fallback;\n\n// Minimal, deliberate markdown to HTML. Handles H2, ordered lists, bold, paragraphs.\nconst esc = (t) => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');\nconst inline = (t) => esc(t).replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');\n\nconst H2 = 'font:600 20px/1.25 Georgia,serif;color:#172A46;margin:32px 0 10px;';\nconst P  = 'font:400 16px/1.6 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#26364f;margin:0 0 14px;';\nconst LI = P + 'margin:0 0 12px;';\n\nconst lines = src.split(/\\r?\\n/);\nconst out = [];\nlet list = [];\nconst flush = () => {\n  if (!list.length) return;\n  out.push('<ol style=\"padding-left:22px;margin:0 0 18px;\">' + list.join('') + '</ol>');\n  list = [];\n};\nfor (const line of lines) {\n  const t = line.trim();\n  if (!t) { flush(); continue; }\n  if (t.startsWith('## ')) { flush(); out.push('<h2 style=\"' + H2 + '\">' + inline(t.slice(3)) + '</h2>'); continue; }\n  if (/^\\d+[.)]\\s/.test(t)) { list.push('<li style=\"' + LI + '\">' + inline(t.replace(/^\\d+[.)]\\s/,'')) + '</li>'); continue; }\n  flush();\n  out.push('<p style=\"' + P + '\">' + inline(t) + '</p>');\n}\nflush();\n\n// Dimension bars, table-based so they survive Outlook and Gmail.\nconst bar = (label, score) => {\n  const w = Math.max(score, 2);\n  const fill = label === d.weakest ? '#8C3A2B' : '#172A46';\n  return '<tr>'\n    + '<td style=\"font:500 14px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#4A5B75;padding:6px 12px 6px 0;white-space:nowrap;\">' + label + '</td>'\n    + '<td style=\"width:100%;padding:6px 10px 6px 0;\">'\n    +   '<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"background:#E4DFD4;\"><tr>'\n    +     '<td style=\"width:' + w + '%;background:' + fill + ';height:6px;font-size:0;line-height:0;\">&nbsp;</td>'\n    +     '<td style=\"font-size:0;line-height:0;\">&nbsp;</td>'\n    +   '</tr></table>'\n    + '</td>'\n    + '<td style=\"font:600 15px/1.4 Georgia,serif;color:#9A7434;padding:6px 0;\">' + score + '</td>'\n    + '</tr>';\n};\n\nconst bars = [\n  bar('Vision', d.vision), bar('Scale', d.scale), bar('Impact', d.impact),\n  bar('Systems', d.systems), bar('Legacy', d.legacy)\n].join('');\n\nconst html = [\n'<!doctype html><html><body style=\"margin:0;padding:0;background:#FBF9F4;\">',\n'<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background:#FBF9F4;padding:28px 12px;\"><tr><td align=\"center\">',\n'<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background:#FFFFFF;border:1px solid #E4DFD4;\">',\n'<tr><td style=\"padding:22px 28px 16px;border-bottom:1px solid #E4DFD4;\">',\n  '<div style=\"font:600 15px/1.3 Georgia,serif;color:#172A46;\">The Builder\\'s Handbook</div>',\n  '<div style=\"font:400 13px/1.3 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#9A7434;\">Ideas. Insights. Impact.</div>',\n'</td></tr>',\n'<tr><td style=\"padding:26px 28px 6px;\">',\n  '<div style=\"font:400 13px/1.3 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#4A5B75;\">' + d.name + ', your Builder\\'s Vision Audit</div>',\n  '<div style=\"font:600 56px/1 Georgia,serif;color:#172A46;letter-spacing:-1px;padding:6px 0 0;\">' + d.overall + '<span style=\"font-size:18px;color:#4A5B75;\">/100</span></div>',\n  '<div style=\"font:600 26px/1.15 Georgia,serif;color:#172A46;padding:10px 0 0;\">' + d.archetype + '</div>',\n  '<div style=\"font:400 15px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#4A5B75;padding:8px 0 0;\">Ambition ' + d.ambition + ' &nbsp;\u00b7&nbsp; Capacity ' + d.capacity + ' &nbsp;\u00b7&nbsp; Weakest dimension: ' + d.weakest + '</div>',\n'</td></tr>',\n'<tr><td style=\"padding:20px 28px 4px;\">',\n  '<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">' + bars + '</table>',\n'</td></tr>',\n'<tr><td style=\"padding:0 28px 8px;\">' + out.join('') + '</td></tr>',\n'<tr><td style=\"padding:8px 28px 30px;\">',\n  '<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"background:#172A46;padding:13px 22px;\">',\n  '<a href=\"https://www.thebuildershandbook.com\" style=\"font:600 15px -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#FFFFFF;text-decoration:none;\">Read The Builder\\'s Handbook</a>',\n  '</td></tr></table>',\n'</td></tr>',\n'<tr><td style=\"padding:16px 28px 22px;border-top:1px solid #E4DFD4;font:400 12px/1.5 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#8A8578;\">',\n  'You asked for this report at www.thebuildershandbook.com. Retake the audit in ninety days and compare the two scores.',\n'</td></tr>',\n'</table></td></tr></table></body></html>'\n].join('');\n\nconst subject = d.archetype\n  ? (d.name !== 'there' ? d.name + ', your Vision Audit: ' + d.archetype : 'Your Vision Audit: ' + d.archetype)\n  : 'Your Builder\\'s Vision Audit';\n\nreturn [{ json: { html, subject, generated, to: d.email } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        -100
+      ],
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Build branded email"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        840,
+        -100
+      ],
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Send the report",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "JFPCwNaIw6JwOSii",
+          "name": "Gmail account - Stanierm"
+        }
+      },
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Pick your respondents spreadsheet"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Pick the sheet"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "received_at": "={{ $('Normalise submission').first().json.received_at }}",
+            "email": "={{ $('Normalise submission').first().json.email }}",
+            "name": "={{ $('Normalise submission').first().json.name }}",
+            "archetype": "={{ $('Normalise submission').first().json.archetype }}",
+            "overall": "={{ $('Normalise submission').first().json.overall }}",
+            "ambition": "={{ $('Normalise submission').first().json.ambition }}",
+            "capacity": "={{ $('Normalise submission').first().json.capacity }}",
+            "spread": "={{ $('Normalise submission').first().json.spread }}",
+            "vision": "={{ $('Normalise submission').first().json.vision }}",
+            "scale": "={{ $('Normalise submission').first().json.scale }}",
+            "impact": "={{ $('Normalise submission').first().json.impact }}",
+            "systems": "={{ $('Normalise submission').first().json.systems }}",
+            "legacy": "={{ $('Normalise submission').first().json.legacy }}",
+            "weakest": "={{ $('Normalise submission').first().json.weakest }}",
+            "strongest": "={{ $('Normalise submission').first().json.strongest }}",
+            "business": "={{ $('Normalise submission').first().json.business }}",
+            "future": "={{ $('Normalise submission').first().json.future }}",
+            "ai_generated": "={{ $('Build branded email').first().json.generated }}",
+            "page": "={{ $('Normalise submission').first().json.page }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1060,
+        -100
+      ],
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Log the respondent",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WIHlQtGVP04HpNia",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        400,
+        140
+      ],
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Discard (no consent or bad email)"
+    },
+    {
+      "parameters": {
+        "content": "## Before you activate\n\n**1. Sheet.** Open *Log the respondent* and pick a spreadsheet and tab. Header row must be:\n`received_at, email, name, archetype, overall, ambition, capacity, spread, vision, scale, impact, systems, legacy, weakest, strongest, business, future, ai_generated, page`\n\n**2. Credentials.** Check the Anthropic credential on *Write the report* and the Gmail account on *Send the report*. The Gmail one decides the from-address every respondent sees.\n\n**3. Model.** Set inside *Normalise submission* (`model: 'claude-sonnet-5'`). Swap it there.\n\n**4. No CORS needed.** Requests arrive from the Cloudflare Pages Function, not from a browser. To lock the webhook down, add Header Auth on *Audit submitted* for `X-Audit-Secret` and set the same value as `AUDIT_SHARED_SECRET` in Pages.",
+        "height": 470,
+        "width": 420,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -700,
+        -140
+      ],
+      "id": "a1000000-0000-4000-8000-000000000009",
+      "name": "Setup"
+    },
+    {
+      "parameters": {
+        "content": "### Fails soft, on purpose\n\nIf Claude times out, *Build branded email* sends the score plus a static three-step plan instead. The respondent always gets something, and `ai_generated` in the sheet records which one went out. Same for a Gmail or Sheets failure: neither stops the rest of the chain.",
+        "height": 230,
+        "width": 380,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        620,
+        -400
+      ],
+      "id": "a1000000-0000-4000-8000-00000000000a",
+      "name": "Failure behaviour"
+    }
+  ],
+  "connections": {
+    "Audit submitted": {
+      "main": [
+        [
+          {
+            "node": "Normalise submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise submission": {
+      "main": [
+        [
+          {
+            "node": "Email and consent valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email and consent valid?": {
+      "main": [
+        [
+          {
+            "node": "Write the report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Discard (no consent or bad email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write the report": {
+      "main": [
+        [
+          {
+            "node": "Build branded email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build branded email": {
+      "main": [
+        [
+          {
+            "node": "Send the report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send the report": {
+      "main": [
+        [
+          {
+            "node": "Log the respondent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "builders-handbook-vision-audit"
+  }
+}

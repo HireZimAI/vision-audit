@@ -1,0 +1,11 @@
+{
+  "name": "builders-vision-audit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Builder's Vision Audit — a diagnostic for owner-operators, published by The Builder's Handbook",
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public"
+  },
+  "homepage": "https://www.thebuildershandbook.com"
+}
